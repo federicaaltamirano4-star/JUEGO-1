@@ -119,18 +119,22 @@ body{display:flex;justify-content:center;align-items:flex-start;padding:12px;}
 #pw-hint{margin-left:auto;font-size:7px;color:var(--dim);letter-spacing:.05em;}
 
 /* TOUCH CONTROLS */
-#ctrl-touch{width:100%;background:#08080f;border-top:1px solid var(--border);display:flex;align-items:stretch;}
-.touch-zone{flex:1;display:flex;align-items:center;justify-content:center;padding:12px 8px;cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:manipulation;transition:background .08s;}
-.touch-zone:active,.touch-zone.pr{background:var(--border);}
-#tz-up{border-right:1px solid var(--border);}
-#tz-down{border-right:1px solid var(--border);}
-#tz-turbo{flex:1.4;border-right:1px solid var(--border);}
-#tz-q{border-right:1px solid var(--border);}
-#tz-e{border-right:1px solid var(--border);}
-#tz-pause{}
-.tz-label{font-size:11px;color:#555;letter-spacing:.08em;font-family:'Courier New',monospace;pointer-events:none;}
-.tz-sub{font-size:7px;color:#333;letter-spacing:.06em;margin-top:2px;pointer-events:none;}
-.tz-col{display:flex;flex-direction:column;align-items:center;}
+#ctrl-touch{width:100%;background:#08080f;border-top:1px solid var(--border);display:flex;align-items:stretch;min-height:70px;}
+#swipe-zone{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:10px;cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:none;border-right:1px solid var(--border);position:relative;overflow:hidden;}
+#swipe-zone.swiping-up{background:rgba(245,196,0,.08);}
+#swipe-zone.swiping-down{background:rgba(245,196,0,.08);}
+#swipe-zone.tapped{background:rgba(245,196,0,.15);}
+#swipe-hint{display:flex;align-items:center;gap:8px;}
+#swipe-arrow{font-size:22px;color:#555;transition:transform .15s,color .15s;}
+#swipe-label{font-size:10px;color:#444;letter-spacing:.08em;font-family:'Courier New',monospace;}
+#swipe-turbo-hint{font-size:8px;color:#333;letter-spacing:.06em;font-family:'Courier New',monospace;}
+#swipe-zone.swiping-up #swipe-arrow{transform:translateY(-4px);color:#f5c400;}
+#swipe-zone.swiping-down #swipe-arrow{transform:translateY(4px);color:#f5c400;}
+#side-btns{display:flex;flex-direction:column;gap:0;width:64px;flex-shrink:0;}
+.side-btn{flex:1;background:var(--surface2);border:none;border-bottom:1px solid var(--border);color:#666;font-family:'Courier New',monospace;font-size:13px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;touch-action:manipulation;user-select:none;-webkit-user-select:none;}
+.side-btn:last-child{border-bottom:none;}
+.side-btn:active{background:var(--border);color:#f5c400;}
+.side-sub{font-size:7px;color:#444;letter-spacing:.05em;}
 
 /* PAUSE OVERLAY */
 #pause-overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(5,5,16,.92);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:10;}
@@ -303,23 +307,17 @@ body{display:flex;justify-content:center;align-items:flex-start;padding:12px;}
 
   <!-- TOUCH CONTROLS -->
   <div id="ctrl-touch">
-    <div class="touch-zone" id="tz-up">
-      <div class="tz-col"><span style="font-size:18px;color:#888;">▲</span><span class="tz-sub">ARRIBA</span></div>
+    <div id="swipe-zone">
+      <div id="swipe-hint">
+        <span id="swipe-arrow">↕</span>
+        <span id="swipe-label">DESLIZÁ para cambiar carril</span>
+      </div>
+      <div id="swipe-turbo-hint">TAP = TURBO &nbsp;·&nbsp; TAP LARGO = PODER</div>
     </div>
-    <div class="touch-zone" id="tz-down">
-      <div class="tz-col"><span style="font-size:18px;color:#888;">▼</span><span class="tz-sub">ABAJO</span></div>
-    </div>
-    <div class="touch-zone" id="tz-turbo">
-      <div class="tz-col"><span style="font-size:13px;color:#f5c40099;letter-spacing:.1em;">TURBO</span><span class="tz-sub">ESPACIO</span></div>
-    </div>
-    <div class="touch-zone" id="tz-q">
-      <div class="tz-col"><span style="font-size:14px;color:#888;">Q</span><span class="tz-sub">POW1</span></div>
-    </div>
-    <div class="touch-zone" id="tz-e">
-      <div class="tz-col"><span style="font-size:14px;color:#888;">E</span><span class="tz-sub">POW2</span></div>
-    </div>
-    <div class="touch-zone" id="tz-pause">
-      <div class="tz-col"><span style="font-size:14px;color:#555;">||</span><span class="tz-sub">PAUSA</span></div>
+    <div id="side-btns">
+      <button class="side-btn" id="tz-q">Q<span class="side-sub">POW1</span></button>
+      <button class="side-btn" id="tz-e">E<span class="side-sub">POW2</span></button>
+      <button class="side-btn" id="tz-pause">||<span class="side-sub">PAUSA</span></button>
     </div>
   </div>
 
@@ -361,7 +359,6 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "559037236783",
   appId:             "1:559037236783:web:58c646a1fa2fbf2c2468da"
 };
-
 /* ══ DIFICULTAD ══ */
 const DIFF={
   easy:{spawnBase:90,spawnRng:70,maxSpeed:5,   powerRate:.22},
@@ -786,17 +783,63 @@ function usePower(slot){
   }
 }
 
-/* ══ CONTROLES TOUCH ══ */
+/* ══ CONTROLES TOUCH — SWIPE ══ */
+(function(){
+  const zone=document.getElementById('swipe-zone');
+  let startY=0,startX=0,startTime=0,moved=false,longPressTimer=null;
+  const SWIPE_THRESHOLD=30;
+  const LONG_PRESS_MS=400;
+
+  function onStart(y,x){
+    startY=y; startX=x; startTime=Date.now(); moved=false;
+    longPressTimer=setTimeout(()=>{
+      if(!moved){
+        usePower(0);
+        zone.classList.add('tapped');
+        setTimeout(()=>zone.classList.remove('tapped'),200);
+      }
+    },LONG_PRESS_MS);
+  }
+
+  function onMove(y){
+    const dy=y-startY;
+    if(Math.abs(dy)>SWIPE_THRESHOLD&&!moved){
+      moved=true;
+      clearTimeout(longPressTimer);
+      if(dy<0){moveUp();zone.classList.add('swiping-up');setTimeout(()=>zone.classList.remove('swiping-up'),200);}
+      else{moveDown();zone.classList.add('swiping-down');setTimeout(()=>zone.classList.remove('swiping-down'),200);}
+      // allow chaining — reset start for continued swipe
+      startY=y;
+    }
+  }
+
+  function onEnd(){
+    clearTimeout(longPressTimer);
+    if(!moved&&Date.now()-startTime<LONG_PRESS_MS){
+      // quick tap = turbo
+      if(gameState==='play'&&turboTimer<=0){
+        turboTimer=90;
+        zone.classList.add('tapped');
+        setTimeout(()=>zone.classList.remove('tapped'),150);
+      }
+    }
+    moved=false;
+  }
+
+  zone.addEventListener('touchstart',e=>{e.preventDefault();const t=e.touches[0];onStart(t.clientY,t.clientX);},{passive:false});
+  zone.addEventListener('touchmove',e=>{e.preventDefault();onMove(e.touches[0].clientY);},{passive:false});
+  zone.addEventListener('touchend',e=>{e.preventDefault();onEnd();},{passive:false});
+  // mouse fallback
+  zone.addEventListener('mousedown',e=>{onStart(e.clientY,e.clientX);});
+  zone.addEventListener('mousemove',e=>{if(e.buttons)onMove(e.clientY);});
+  zone.addEventListener('mouseup',onEnd);
+})();
+
 function addTouch(id,fn){
   const el=document.getElementById(id);
-  el.addEventListener('touchstart',e=>{e.preventDefault();fn();el.classList.add('pr');},{passive:false});
-  el.addEventListener('touchend',()=>el.classList.remove('pr'));
-  el.addEventListener('pointerdown',e=>{e.preventDefault();fn();el.classList.add('pr');});
-  el.addEventListener('pointerup',()=>el.classList.remove('pr'));
+  el.addEventListener('touchstart',e=>{e.preventDefault();fn();},{passive:false});
+  el.addEventListener('pointerdown',e=>{e.preventDefault();fn();});
 }
-addTouch('tz-up',moveUp);
-addTouch('tz-down',moveDown);
-addTouch('tz-turbo',()=>{if(gameState==='play'&&turboTimer<=0)turboTimer=90;});
 addTouch('tz-q',()=>usePower(0));
 addTouch('tz-e',()=>usePower(1));
 addTouch('tz-pause',togglePause);
