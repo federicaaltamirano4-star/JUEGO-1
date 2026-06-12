@@ -118,23 +118,47 @@ body{display:flex;justify-content:center;align-items:flex-start;padding:12px;}
 .pw-key{font-size:8px;color:var(--dim);}
 #pw-hint{margin-left:auto;font-size:7px;color:var(--dim);letter-spacing:.05em;}
 
-/* TOUCH CONTROLS */
-#ctrl-touch{width:100%;background:#08080f;border-top:1px solid var(--border);display:flex;align-items:stretch;min-height:70px;}
-#swipe-zone{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:10px;cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:none;border-right:1px solid var(--border);position:relative;overflow:hidden;}
-#swipe-zone.swiping-up{background:rgba(245,196,0,.08);}
-#swipe-zone.swiping-down{background:rgba(245,196,0,.08);}
-#swipe-zone.tapped{background:rgba(245,196,0,.15);}
-#swipe-hint{display:flex;align-items:center;gap:8px;}
-#swipe-arrow{font-size:22px;color:#555;transition:transform .15s,color .15s;}
-#swipe-label{font-size:10px;color:#444;letter-spacing:.08em;font-family:'Courier New',monospace;}
-#swipe-turbo-hint{font-size:8px;color:#333;letter-spacing:.06em;font-family:'Courier New',monospace;}
-#swipe-zone.swiping-up #swipe-arrow{transform:translateY(-4px);color:#f5c400;}
-#swipe-zone.swiping-down #swipe-arrow{transform:translateY(4px);color:#f5c400;}
-#side-btns{display:flex;flex-direction:column;gap:0;width:64px;flex-shrink:0;}
-.side-btn{flex:1;background:var(--surface2);border:none;border-bottom:1px solid var(--border);color:#666;font-family:'Courier New',monospace;font-size:13px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;touch-action:manipulation;user-select:none;-webkit-user-select:none;}
-.side-btn:last-child{border-bottom:none;}
-.side-btn:active{background:var(--border);color:#f5c400;}
-.side-sub{font-size:7px;color:#444;letter-spacing:.05em;}
+/* TOUCH OVERLAY — cubre todo el game-area */
+#game-area{position:relative;}
+#touch-overlay{
+  position:absolute;top:0;left:0;width:100%;height:100%;
+  display:none;
+  touch-action:none;
+  user-select:none;-webkit-user-select:none;
+  z-index:5;
+}
+#touch-overlay.active{display:flex;align-items:flex-start;justify-content:flex-end;}
+#touch-overlay.flash-up{background:rgba(245,196,0,.07);}
+#touch-overlay.flash-down{background:rgba(245,196,0,.07);}
+#touch-overlay.flash-turbo{background:rgba(245,196,0,.13);}
+#side-btns{
+  display:flex;flex-direction:column;gap:6px;
+  padding:8px 6px;
+  pointer-events:all;
+}
+.side-btn{
+  width:44px;height:44px;
+  background:rgba(10,10,18,.75);
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:8px;color:#666;
+  font-family:'Courier New',monospace;font-size:12px;
+  cursor:pointer;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:2px;
+  touch-action:manipulation;
+  backdrop-filter:blur(4px);
+  -webkit-backdrop-filter:blur(4px);
+}
+.side-btn:active{background:rgba(245,196,0,.2);color:#f5c400;border-color:#f5c40066;}
+.side-sub{font-size:6px;color:#444;letter-spacing:.05em;}
+#touch-hint{
+  position:absolute;bottom:8px;left:50%;transform:translateX(-50%);
+  pointer-events:none;
+}
+#touch-hint-text{
+  font-size:8px;color:rgba(255,255,255,.2);
+  letter-spacing:.08em;font-family:'Courier New',monospace;
+  white-space:nowrap;
+}
 
 /* PAUSE OVERLAY */
 #pause-overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(5,5,16,.92);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:10;}
@@ -305,19 +329,15 @@ body{display:flex;justify-content:center;align-items:flex-start;padding:12px;}
     <span id="pw-hint">sin poderes</span>
   </div>
 
-  <!-- TOUCH CONTROLS -->
-  <div id="ctrl-touch">
-    <div id="swipe-zone">
-      <div id="swipe-hint">
-        <span id="swipe-arrow">↕</span>
-        <span id="swipe-label">DESLIZÁ para cambiar carril</span>
-      </div>
-      <div id="swipe-turbo-hint">TAP = TURBO &nbsp;·&nbsp; TAP LARGO = PODER</div>
-    </div>
+  <!-- TOUCH OVERLAY sobre el canvas -->
+  <div id="touch-overlay">
     <div id="side-btns">
       <button class="side-btn" id="tz-q">Q<span class="side-sub">POW1</span></button>
       <button class="side-btn" id="tz-e">E<span class="side-sub">POW2</span></button>
       <button class="side-btn" id="tz-pause">||<span class="side-sub">PAUSA</span></button>
+    </div>
+    <div id="touch-hint">
+      <span id="touch-hint-text">↕ deslizá · tap turbo · largo poder</span>
     </div>
   </div>
 
@@ -359,6 +379,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "559037236783",
   appId:             "1:559037236783:web:58c646a1fa2fbf2c2468da"
 };
+
 /* ══ DIFICULTAD ══ */
 const DIFF={
   easy:{spawnBase:90,spawnRng:70,maxSpeed:5,   powerRate:.22},
@@ -783,66 +804,92 @@ function usePower(slot){
   }
 }
 
-/* ══ CONTROLES TOUCH — SWIPE ══ */
-(function(){
-  const zone=document.getElementById('swipe-zone');
-  let startY=0,startX=0,startTime=0,moved=false,longPressTimer=null;
-  const SWIPE_THRESHOLD=30;
-  const LONG_PRESS_MS=400;
+/* ══ CONTROLES TOUCH — SWIPE FULLSCREEN ══ */
+function isMobile(){return('ontouchstart' in window)||navigator.maxTouchPoints>0;}
 
-  function onStart(y,x){
-    startY=y; startX=x; startTime=Date.now(); moved=false;
+function setupTouchOverlay(){
+  const overlay=document.getElementById('touch-overlay');
+  if(!isMobile())return; // teclado en desktop
+  overlay.classList.add('active');
+
+  let startY=0,startTime=0,moved=false,longPressTimer=null;
+  const SWIPE_THRESHOLD=22; // px — más sensible
+  const LONG_PRESS_MS=380;
+
+  function flash(cls){
+    overlay.classList.add(cls);
+    setTimeout(()=>overlay.classList.remove(cls),180);
+  }
+
+  function onStart(y){
+    startY=y; startTime=Date.now(); moved=false;
     longPressTimer=setTimeout(()=>{
-      if(!moved){
-        usePower(0);
-        zone.classList.add('tapped');
-        setTimeout(()=>zone.classList.remove('tapped'),200);
-      }
+      if(!moved){usePower(0);flash('flash-turbo');}
     },LONG_PRESS_MS);
   }
 
   function onMove(y){
     const dy=y-startY;
-    if(Math.abs(dy)>SWIPE_THRESHOLD&&!moved){
+    if(!moved&&Math.abs(dy)>SWIPE_THRESHOLD){
       moved=true;
       clearTimeout(longPressTimer);
-      if(dy<0){moveUp();zone.classList.add('swiping-up');setTimeout(()=>zone.classList.remove('swiping-up'),200);}
-      else{moveDown();zone.classList.add('swiping-down');setTimeout(()=>zone.classList.remove('swiping-down'),200);}
-      // allow chaining — reset start for continued swipe
-      startY=y;
+      if(dy<0){moveUp();flash('flash-up');}
+      else{moveDown();flash('flash-down');}
+      startY=y; // permite swipes encadenados
     }
   }
 
   function onEnd(){
     clearTimeout(longPressTimer);
     if(!moved&&Date.now()-startTime<LONG_PRESS_MS){
-      // quick tap = turbo
-      if(gameState==='play'&&turboTimer<=0){
-        turboTimer=90;
-        zone.classList.add('tapped');
-        setTimeout(()=>zone.classList.remove('tapped'),150);
-      }
+      if(gameState==='play'&&turboTimer<=0){turboTimer=90;flash('flash-turbo');}
     }
     moved=false;
   }
 
-  zone.addEventListener('touchstart',e=>{e.preventDefault();const t=e.touches[0];onStart(t.clientY,t.clientX);},{passive:false});
-  zone.addEventListener('touchmove',e=>{e.preventDefault();onMove(e.touches[0].clientY);},{passive:false});
-  zone.addEventListener('touchend',e=>{e.preventDefault();onEnd();},{passive:false});
-  // mouse fallback
-  zone.addEventListener('mousedown',e=>{onStart(e.clientY,e.clientX);});
-  zone.addEventListener('mousemove',e=>{if(e.buttons)onMove(e.clientY);});
-  zone.addEventListener('mouseup',onEnd);
-})();
+  overlay.addEventListener('touchstart',e=>{
+    // ignorar si el target es un botón lateral
+    if(e.target.closest('.side-btn'))return;
+    e.preventDefault();
+    onStart(e.touches[0].clientY);
+  },{passive:false});
+
+  overlay.addEventListener('touchmove',e=>{
+    if(e.target.closest('.side-btn'))return;
+    e.preventDefault();
+    onMove(e.touches[0].clientY);
+  },{passive:false});
+
+  overlay.addEventListener('touchend',e=>{
+    if(e.target.closest('.side-btn'))return;
+    e.preventDefault();
+    onEnd();
+  },{passive:false});
+
+  // ocultar hint después de primer swipe
+  let hintHidden=false;
+  overlay.addEventListener('touchstart',()=>{
+    if(!hintHidden){
+      hintHidden=true;
+      const h=document.getElementById('touch-hint');
+      if(h)setTimeout(()=>{h.style.opacity='0';h.style.transition='opacity .5s';},1500);
+    }
+  },{passive:true});
+}
 
 function addTouch(id,fn){
   const el=document.getElementById(id);
-  el.addEventListener('touchstart',e=>{e.preventDefault();fn();},{passive:false});
-  el.addEventListener('pointerdown',e=>{e.preventDefault();fn();});
+  if(!el)return;
+  el.addEventListener('touchstart',e=>{e.stopPropagation();e.preventDefault();fn();},{passive:false});
+  el.addEventListener('pointerdown',e=>{e.stopPropagation();e.preventDefault();fn();});
 }
 addTouch('tz-q',()=>usePower(0));
 addTouch('tz-e',()=>usePower(1));
 addTouch('tz-pause',togglePause);
+
+// inicializar después de que arranque el juego
+const _origStartGame=startGame;
+startGame=function(){_origStartGame();setupTouchOverlay();};
 
 function moveUp(){if(gameState!=='play')return;if(player.lane>0)player.lane--;}
 function moveDown(){if(gameState!=='play')return;if(player.lane<2)player.lane++;}
